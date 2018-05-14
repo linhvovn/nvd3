@@ -146,7 +146,17 @@ nv.models.multiBar = function() {
                 }
                 return domain;
             }).concat(forceY)))
-            .range(yRange || [availableHeight, 0]);
+            //.range(yRange || [availableHeight, 0]);
+			
+			//============================================================
+            // @Author: linh
+			// Add offset for displaying text in multiBarChart
+            //------------------------------------------------------------
+		    .range(yRange || [availableHeight - (y.domain()[0] < 0 ? 50 : 0), y.domain()[1] > 0 ? 50 : 0]);
+			//============================================================
+            // End Customization
+            //------------------------------------------------------------
+			
 
             // If scale's domain don't have a range, slightly adjust to make one... so a chart can show a single data point
             if (x.domain()[0] === x.domain()[1])

@@ -385,6 +385,163 @@ nv.models.multiBarChart = function() {
                 }
                 chart.update();
             });
+			
+			//============================================================
+            // @Author: linh
+			// Customization to add value on top of chart
+			// Execute when the renderEnd is fired
+            //------------------------------------------------------------
+			var removeBarsText = function(target){
+	 		            	target
+	 		            	.selectAll('.nv-multibar .nv-group text.bar-values')
+	 		            	//.transition()
+	 		            	//.duration(200)
+	 		            	//.style('font-size','0px')
+ 		            		.remove();
+	 		            };
+						
+			dispatch.on('stateChange.text',function(){
+	 		     removeBarsText(container);
+	 		});
+			
+			dispatch.on('renderEnd', function(){
+						removeBarsText(container);
+						//To calculate bar text from a group
+	 		            //   1. Text is equal to attr yAttr, if not, then use bar.y
+	 		            //   2. y will be bar.y - 10 -> offset 10, so the text will be on top of the bar
+	 		            //   3. x will be bar.y + barwidth/2 -> the text will start from the middle of the bar
+	 		            //   4. The text will have the same transform with its bar
+	 		            var calculateBarData = function(g,yAttr){
+	 		            	var barsData = [];
+	 		            	g.selectAll('.nv-bar').each(function(bar){
+ 		            			var b = d3.select(this),
+ 	 		            	    barWidth = b.attr('width'),
+ 	 		            	    barHeight = b.attr('height'),
+ 	 		            	    x = parseFloat(b.attr('x')) + (parseFloat(barWidth) / 2),
+ 	 		            	    y = parseFloat(b.attr('y')) - 10,
+ 	 		            	    series = d3.select(this.parentNode).attr('class');
+ 		            			
+ 		            			var val = bar.y;
+ 		            			if (yAttr != undefined) val = b.attr(yAttr);
+ 		            			
+ 		            			barsData.push({
+ 		            				text: val,
+ 		            				transform: b.attr('transform'),
+ 		            				y: y,
+ 		            				x: x,
+ 		            				series: series,
+ 		            				opacity: 1
+ 		            			});
+ 		            		});
+	 		            	
+	 		            	return barsData;
+	 		            },
+	 		            
+	 		            //Control the behaviour of rendering text
+	 		            //Font-size start with 0 and end with 12px
+	 		            //This is controlled by a transition during 500ms for smoothly
+	 		            renderTexts = function(currentTexts){
+	 		            	currentTexts
+		            			.enter()
+		            			.append('text')
+		            			.text(function(d){
+		            	        	return d.text;
+		            	      	})
+		            			.attr('transform',function(d){
+		            				return d.transform;
+		            			})
+		            			.style('font-size','0px')
+		            			.attr('y',function(d){
+		            				return d.y;
+		            			})
+		            			.attr('x',function(d){
+		            				var width = this.getBBox().width;
+		            				return d.x - (width/2);
+		            			})
+		            			.attr('class','bar-values');
+		            		
+		            		currentTexts
+		            			.transition()
+		            			.duration(300)
+		            			.style('font-size','12px');
+	 		            },
+	 		            
+	 		            //Calculate and add text to each bar if the chart is in group mode
+	 		            // 1. Calculate text data for each bar
+	 		            // 2. Call rendering method to render text based on calculated data
+	 		            handleDataForGroup = function(target){
+	 		            	target.selectAll('.nv-multibar .nv-group').each(function(group,i){
+	 		            		var g = d3.select(this),
+	 		            		barsData = calculateBarData(g),
+	 		            		currentTexts = g.selectAll("text.bar-values").data(barsData);
+	 		            		renderTexts(currentTexts);
+	 		            	});
+	 		            },
+	 		            
+	 		           //Calculate and add text to each stacked if the chart is in stacked mode
+	 		           // 1. Calculate each stack value by adding all related bars
+	 		           // 2. Loop through the last series and update data-y to corresponding  calculated data
+	 		           // 3. Calculate text data for each stack
+	 		           // 4. Call rendering method to render text based on caculated data
+	 		           handleDataForStacked = function(target){
+	 		            	var map = {};
+	 		            	
+	 		            	//sum up y
+	 		            	target.selectAll(' .nv-multibar .nv-group').each(function(g,i){
+	 		            		var group = d3.select(this);
+	 		            		group.selectAll('.nv-bar').each(function(bar,i){
+	 		            			if (map[i] == undefined){
+	 		            				map[i] = 0;
+	 		            			}
+	 		            			
+	 		            			var barHeight = d3.select(this).style('height').replace('px','');
+	 		            			barHeight = parseFloat(barHeight);
+	 		            			if (barHeight >0 ){
+	 		            				map[i]+= parseFloat(bar.y);
+	 		            			}
+	 		            		});
+	 		            	});
+	 		            	
+	 		            	//assign caculated value to stack
+	 		            	var lastSeriers = target.selectAll('.nv-multibar .nv-group:last-of-type');
+	 		            	lastSeriers.selectAll('.nv-bar').each(function(d,i){
+	 		            		var bar = d3.select(this);
+	 		            		bar.attr('data-y',map[i]);
+	 		            	});
+	 		            	
+	 		            	//caculate text data
+	 		            	var barsData = calculateBarData(lastSeriers,'data-y'),
+	 		            	currentTexts = lastSeriers.selectAll("text.bar-values").data(barsData);
+	 		            	renderTexts(currentTexts);
+	 		           },
+	 		            updateValueForBars = function(chart,target){
+	 		            	if (chart.stacked()){
+	 		            		handleDataForStacked(target);
+	 		            	}else{
+	 		            		handleDataForGroup(target);
+	 		            	}
+	 		            	
+	 		            }
+	 		           	;
+						
+											
+	 		            	//1. remove empty series
+	 		            	container.selectAll('.nv-groups .nv-group').each(function(d){
+	 		            		var group = d3.select(this);
+	 		            		if (group.selectAll('.nv-bar')[0].length == 0){
+	 		            			group.remove();
+	 		            		}
+	 		            	});
+	 		                updateValueForBars(chart,container);
+	 		                
+	 		});
+			//============================================================
+            // END Customization
+            //------------------------------------------------------------
+			
+			 //============================================================
+            // Event Handling/Dispatching (in chart's scope)
+            //------------------------------------------------------------
 
             if (useInteractiveGuideline) {
                 interactiveLayer.dispatch.on('elementMousemove', function(e) {
